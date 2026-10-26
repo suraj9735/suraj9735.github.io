@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blog | Suraj Kumar</title>
+  <meta name="description" content="Notes on vibrations, chatter, signal processing and research.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/content.js"></script>
+  <script src="js/site.js"></script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main>
+    <div class="container page-head">
+      <p class="eyebrow">Blog</p>
+      <h1>Notes &amp; ideas</h1>
+      <p>Explanations, research notes and lessons from the lab.</p>
+    </div>
+    <div class="container">
+      <div class="toolbar">
+        <div id="tags" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        <input class="search" id="q" type="search" placeholder="Search posts…">
+      </div>
+      <div class="grid auto" id="list"></div>
+    </div>
+  </main>
+  <footer id="site-footer"></footer>
+
+  <script>
+    let tag = "All";
+    const fmt = (d) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const all = ["All", ...new Set(POSTS.flatMap((p) => p.tags))];
+    tags.innerHTML = all.map((t) => `<button class="pill${t === "All" ? " active" : ""}" data-t="${esc(t)}">${esc(t)}</button>`).join("");
+    tags.onclick = (e) => { const b = e.target.closest("[data-t]"); if (!b) return; tag = b.dataset.t; [...tags.children].forEach((x) => x.classList.toggle("active", x === b)); render(); };
+    q.oninput = render;
+    function render() {
+      const s = q.value.toLowerCase();
+      const items = POSTS.filter((p) => (tag === "All" || p.tags.includes(tag)) && (p.title + p.excerpt).toLowerCase().includes(s));
+      list.innerHTML = items.length ? items.map((p) => `
+        <a class="card tile post-card" href="post.html?p=${encodeURIComponent(p.slug)}">
+          <div class="meta">${p.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join("")}</div>
+          <h3>${esc(p.title)}</h3>
+          <p>${esc(p.excerpt)}</p>
+          <div class="meta">${fmt(p.date)} · ${esc(p.read)} read</div>
+          <span class="read">Read post →</span>
+        </a>`).join("") : `<p class="empty">No posts match.</p>`;
+    }
+    render();
+  </script>
+</body>
+</html>

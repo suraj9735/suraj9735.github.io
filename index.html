@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Suraj Kumar | Machine Dynamics &amp; Chatter Detection</title>
+  <meta name="description" content="Portfolio of Suraj Kumar, Ph.D. scholar at IIT Bombay: vibrations, chatter detection, signal processing, tutorials and interactive simulations.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/content.js"></script>
+  <script src="js/site.js"></script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main>
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <p class="eyebrow" id="pTitle"></p>
+          <h1>Hi, I'm <span class="grad" id="pName"></span></h1>
+          <p class="lead" id="pTagline"></p>
+          <div class="cta">
+            <a class="btn primary" href="lab.html">Try the interactive lab</a>
+            <a class="btn ghost" href="research.html">View my research</a>
+            <a class="btn ghost" id="cvBtn" hidden>Download CV</a>
+          </div>
+        </div>
+        <div class="card hero-card">
+          <div class="viz">
+            <canvas class="anim" id="heroAnim" style="height:260px"></canvas>
+            <canvas class="plot" id="heroPlot" style="height:260px"></canvas>
+          </div>
+          <small>Live damped spring-mass response, x(t) = e<sup>−ζωₙt</sup> cos(ω<sub>d</sub>t). <a href="lab.html">Change the parameters →</a></small>
+        </div>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container grid c2">
+        <div>
+          <p class="eyebrow">About</p>
+          <h2>Who I am</h2>
+          <div id="pAbout"></div>
+          <div class="grid c3" id="pHighlights" style="margin-top:24px"></div>
+        </div>
+        <div>
+          <p class="eyebrow">Path</p>
+          <h2 style="margin-bottom:24px">Education &amp; experience</h2>
+          <div class="timeline" id="pTimeline"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <p class="eyebrow">Skill set</p>
+        <h2>What I work with</h2>
+        <p class="sub">Tools and methods I use across theory, experiments and computation.</p>
+        <div class="grid c2" id="pSkills"></div>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container">
+        <p class="eyebrow">Explore</p>
+        <h2>Learn with me</h2>
+        <p class="sub">Teaching material and interactive tools I built to explain my field.</p>
+        <div class="grid c3">
+          <a class="card tile" href="lab.html"><div class="ico">〰</div><h3>Interactive Lab</h3><p>Spring-mass simulators, frequency response and PID control you can play with.</p></a>
+          <a class="card tile" href="tutorials.html"><div class="ico">▶</div><h3>Video tutorials</h3><p>Short lessons on vibrations, chatter, signal processing and control.</p></a>
+          <a class="card tile" href="exercises.html"><div class="ico">✎</div><h3>Exercises</h3><p>Worked problems with hints, solutions and instant answer checking.</p></a>
+          <a class="card tile" href="quiz.html"><div class="ico">?</div><h3>Quizzes</h3><p>Test yourself on vibration basics, machining and control.</p></a>
+          <a class="card tile" href="blog.html"><div class="ico">✦</div><h3>Blog</h3><p>Notes on research, methods and lessons learned.</p></a>
+          <a class="card tile" href="research.html"><div class="ico">◎</div><h3>Research</h3><p>Real-time chatter detection in high-speed micromilling.</p></a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer id="site-footer"></footer>
+
+  <script>
+    const P = PROFILE;
+    pTitle.textContent = P.title + " · " + P.affiliation;
+    pName.textContent = P.name;
+    pTagline.textContent = P.tagline;
+    pAbout.innerHTML = P.about.map((t) => `<p>${esc(t)}</p>`).join("");
+    pHighlights.innerHTML = P.highlights.map((h) => `<div class="card" style="padding:16px"><b style="font-size:22px">${esc(h.k)}</b><div style="color:var(--muted);font-size:14px">${esc(h.v)}</div></div>`).join("");
+    pTimeline.innerHTML = P.timeline.map((t) => `<div><span class="when">${esc(t.when)}</span><h4>${esc(t.title)}</h4><p>${esc(t.text)}</p></div>`).join("");
+    pSkills.innerHTML = Object.entries(P.skills).map(([g, list]) => `<div class="card"><h3 style="font-size:17px;margin-bottom:14px">${esc(g)}</h3><div class="skills">${list.map((s) => `<span class="skill">${esc(s)}</span>`).join("")}</div></div>`).join("");
+    if (P.links.cv) { cvBtn.hidden = false; cvBtn.href = P.links.cv; cvBtn.setAttribute("download", ""); }
+
+    // Hero animation: lightly damped free vibration that restarts every cycle
+    const wn = 2 * Math.PI * 0.8, z = 0.08, wd = wn * Math.sqrt(1 - z * z), Tend = 6;
+    const x = (t) => Math.exp(-z * wn * t) * Math.cos(wd * t);
+    let a, p, t0 = performance.now();
+    function setup() { a = fitCanvas(heroAnim); p = fitCanvas(heroPlot); }
+    setup(); addEventListener("resize", setup);
+    (function loop(now) {
+      let t = Math.max(0, ((now - t0) / 1000) % (Tend + 1));
+      t = Math.min(t, Tend);
+      drawSpringMass(a, -x(t), { damper: true });
+      const data = []; for (let s = 0; s <= t; s += 0.02) data.push([s, x(s)]);
+      const env = []; for (let s = 0; s <= Tend; s += 0.05) env.push([s, Math.exp(-z * wn * s)]);
+      drawPlot(p, [
+        { data: env, color: cssVar("--muted"), width: 1, dash: [4, 4] },
+        { data: env.map(([s, v]) => [s, -v]), color: cssVar("--muted"), width: 1, dash: [4, 4] },
+        { data, color: cssVar("--accent"), width: 2.2 },
+      ], { xmin: 0, xmax: Tend, ymin: -1.1, ymax: 1.1, xlabel: "time (s)", ylabel: "x(t)" });
+      requestAnimationFrame(loop);
+    })(t0);
+  </script>
+</body>
+</html>

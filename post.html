@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blog | Suraj Kumar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/content.js"></script>
+  <script src="js/site.js"></script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main>
+    <article class="narrow article" id="post"></article>
+  </main>
+  <footer id="site-footer"></footer>
+
+  <script>
+    const slug = new URLSearchParams(location.search).get("p");
+    const i = POSTS.findIndex((p) => p.slug === slug);
+    const p = POSTS[i];
+    const fmt = (d) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    if (!p) {
+      post.innerHTML = `<p class="empty">Post not found. <a href="blog.html">Back to the blog</a></p>`;
+    } else {
+      document.title = p.title + " | Suraj Kumar";
+      const prev = POSTS[i + 1], next = POSTS[i - 1];
+      post.innerHTML = `
+        <a href="blog.html" style="text-decoration:none;font-weight:600">← All posts</a>
+        <div class="meta" style="margin-top:20px">${p.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join("")}</div>
+        <h1>${esc(p.title)}</h1>
+        <div class="meta" style="margin-bottom:28px">${esc(PROFILE.name)} · ${fmt(p.date)} · ${esc(p.read)} read</div>
+        <div class="content">${p.body}</div>
+        <hr style="border:0;border-top:1px solid var(--border);margin:40px 0 20px">
+        <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
+          ${prev ? `<a href="post.html?p=${encodeURIComponent(prev.slug)}">← ${esc(prev.title)}</a>` : "<span></span>"}
+          ${next ? `<a href="post.html?p=${encodeURIComponent(next.slug)}">${esc(next.title)} →</a>` : ""}
+        </div>`;
+    }
+  </script>
+</body>
+</html>

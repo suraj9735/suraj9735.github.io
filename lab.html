@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Interactive Lab | Suraj Kumar</title>
+  <meta name="description" content="Interactive spring-mass vibration, frequency response and PID control simulators.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/content.js"></script>
+  <script src="js/site.js"></script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main>
+    <div class="container page-head">
+      <p class="eyebrow">Interactive lab</p>
+      <h1>Play with vibrations &amp; control</h1>
+      <p>Each simulator solves the equation of motion numerically in your browser (4th-order Runge–Kutta). Move a slider and the response updates instantly.</p>
+      <div class="lab-nav" style="margin-top:20px">
+        <a class="pill" href="#free">Free vibration</a>
+        <a class="pill" href="#forced">Forced vibration</a>
+        <a class="pill" href="#control">PID control</a>
+        <a class="pill" href="#gifs">Animations</a>
+      </div>
+    </div>
+
+    <!-- FREE -->
+    <section class="section" id="free" style="padding-top:24px">
+      <div class="container">
+        <h2>1 · Free vibration</h2>
+        <p class="sub">m·ẍ + c·ẋ + k·x = 0. Release the mass from x₀ and watch it decay.</p>
+        <div class="card sim">
+          <div class="controls" id="freeCtrls"></div>
+          <div class="viz"><canvas class="anim" id="freeAnim"></canvas><canvas class="plot" id="freePlot"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FORCED -->
+    <section class="section alt" id="forced">
+      <div class="container">
+        <h2>2 · Forced vibration &amp; resonance</h2>
+        <p class="sub">m·ẍ + c·ẋ + k·x = F₀·sin(ωt), starting from rest. Bring the frequency ratio r = ω/ωₙ close to 1 to see resonance.</p>
+        <div class="card sim">
+          <div class="controls" id="forcedCtrls"></div>
+          <div style="display:grid;gap:16px;min-width:0">
+            <div class="viz"><canvas class="anim" id="forcedAnim"></canvas><canvas class="plot" id="forcedPlot"></canvas></div>
+            <canvas id="frfPlot" style="width:100%;height:240px;border:1px solid var(--border);border-radius:12px"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTROL -->
+    <section class="section" id="control">
+      <div class="container">
+        <h2>3 · PID position control</h2>
+        <p class="sub">A controller pushes the mass to a target position: F = Kp·e + Ki·∫e dt + Kd·ė, with e = target − x. Tune the gains to trade speed against overshoot.</p>
+        <div class="card sim">
+          <div class="controls" id="ctrlCtrls"></div>
+          <div class="viz"><canvas class="anim" id="ctrlAnim"></canvas><canvas class="plot" id="ctrlPlot"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GIFS -->
+    <section class="section alt" id="gifs">
+      <div class="container">
+        <h2>Animations</h2>
+        <p class="sub">GIFs of spring-mass responses. Add your own in <code>assets/gifs/</code> and list them in <code>js/content.js</code>.</p>
+        <div class="gif-grid" id="gifGrid"></div>
+      </div>
+    </section>
+  </main>
+  <footer id="site-footer"></footer>
+
+  <script>
+    /* ---------- helpers ---------- */
+    function rk4(f, y, t, dt) {
+      const k1 = f(t, y), k2 = f(t + dt / 2, y.map((v, i) => v + dt / 2 * k1[i]));
+      const k3 = f(t + dt / 2, y.map((v, i) => v + dt / 2 * k2[i])), k4 = f(t + dt, y.map((v, i) => v + dt * k3[i]));
+      return y.map((v, i) => v + dt / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]));
+    }
+    function sliders(el, defs, onChange) {
+      const S = {};
+      el.innerHTML = defs.map((d) => d.html || `
+        <div class="ctrl"><label for="${d.id}">${d.label} <output id="${d.id}o"></output></label>
+        <input type="range" id="${d.id}" min="${d.min}" max="${d.max}" step="${d.step}" value="${d.value}"></div>`).join("");
+      defs.filter((d) => !d.html).forEach((d) => {
+        const inp = document.getElementById(d.id), out = document.getElementById(d.id + "o");
+        const upd = () => { S[d.key] = +inp.value; out.textContent = (+inp.value).toFixed(d.dp ?? 2) + (d.unit ? " " + d.unit : ""); };
+        inp.addEventListener("input", () => { upd(); onChange(); }); upd();
+      });
+      return S;
+    }
+    const fmt = (v, d = 2) => (isFinite(v) ? v.toFixed(d) : "—");
+
+    // Generic animated simulator: compute() returns {t:[], x:[], extra}, drawn with a moving cursor
+    function Sim(o) {
+      let run, a, p, t0 = performance.now(), playing = true, pausedAt = 0;
+      const self = {
+        recompute() { run = o.compute(); t0 = performance.now(); pausedAt = 0; self.static(); },
+        setup() { a = fitCanvas(o.anim); p = fitCanvas(o.plot); o.setupExtra && o.setupExtra(); self.static(); },
+        static() { o.drawExtra && o.drawExtra(run); },
+        toggle(btn) { playing = !playing; if (playing) t0 = performance.now() - pausedAt * 1000 / o.speed; btn.textContent = playing ? "Pause" : "Play"; },
+        restart() { t0 = performance.now(); pausedAt = 0; },
+        frame(now) {
+          if (!run) return;
+          const T = run.t[run.t.length - 1];
+          let tt = playing ? ((now - t0) / 1000) * o.speed : pausedAt;
+          if (tt > T + 0.8) { t0 = now; tt = 0; }
+          if (playing) pausedAt = Math.min(tt, T);
+          const tc = Math.max(0, Math.min(tt, T)), n = Math.min(run.t.length - 1, Math.round(tc / run.dt));
+          o.drawAnim(a, run, n);
+          const upto = [], step = Math.max(1, Math.floor(run.t.length / 900));
+          for (let i = 0; i <= n; i += step) upto.push([run.t[i], run.x[i]]);
+          o.drawPlot(p, run, upto, n);
+        },
+      };
+      return self;
+    }
+    const sims = [];
+    (function loop(now) { sims.forEach((s) => s.frame(now)); requestAnimationFrame(loop); })(performance.now());
+    addEventListener("resize", () => sims.forEach((s) => s.setup()));
+    addEventListener("themechange", () => sims.forEach((s) => s.static()));
+    const buttons = (id) => `<div class="btn-row"><button class="btn ghost small" id="${id}Play">Pause</button><button class="btn ghost small" id="${id}Restart">Restart</button></div>`;
+    const readout = (id, items) => `<div class="readout" id="${id}">${items.map(([k, l]) => `<div><span>${l}</span><b id="${id}_${k}">—</b></div>`).join("")}</div>`;
+
+    /* ---------- 1. FREE ---------- */
+    const F = sliders(freeCtrls, [
+      { id: "fm", key: "m", label: "Mass m", min: 0.2, max: 5, step: 0.1, value: 1, unit: "kg", dp: 1 },
+      { id: "fk", key: "k", label: "Stiffness k", min: 10, max: 400, step: 5, value: 100, unit: "N/m", dp: 0 },
+      { id: "fz", key: "z", label: "Damping ratio ζ", min: 0, max: 2, step: 0.01, value: 0.1 },
+      { id: "fx", key: "x0", label: "Initial displacement x₀", min: -1, max: 1, step: 0.05, value: 1, unit: "m" },
+      { id: "fv", key: "v0", label: "Initial velocity v₀", min: -10, max: 10, step: 0.5, value: 0, unit: "m/s", dp: 1 },
+      { html: readout("fr", [["wn", "ωₙ (rad/s)"], ["fn", "fₙ (Hz)"], ["c", "c (N·s/m)"], ["wd", "ω_d (rad/s)"], ["reg", "Regime"], ["T", "Period (s)"]]) },
+      { html: buttons("free") },
+    ], () => free.recompute());
+    const free = Sim({
+      anim: freeAnim, plot: freePlot, speed: 1,
+      compute() {
+        const { m, k, z, x0, v0 } = F, wn = Math.sqrt(k / m), c = 2 * z * Math.sqrt(k * m), wd = wn * Math.sqrt(Math.max(0, 1 - z * z));
+        fr_wn.textContent = fmt(wn); fr_fn.textContent = fmt(wn / 2 / Math.PI, 3); fr_c.textContent = fmt(c, 1);
+        fr_wd.textContent = z < 1 ? fmt(wd) : "—"; fr_reg.textContent = z === 0 ? "Undamped" : z < 1 ? "Underdamped" : z === 1 ? "Critical" : "Overdamped";
+        fr_T.textContent = z < 1 ? fmt(2 * Math.PI / wd, 3) : "—";
+        const T = Math.min(20, Math.max(3, 8 * 2 * Math.PI / wn)), dt = T / 2000;
+        const t = [], x = []; let y = [x0, v0];
+        for (let i = 0; i <= 2000; i++) { t.push(i * dt); x.push(y[0]); y = rk4((_, s) => [s[1], (-c * s[1] - k * s[0]) / m], y, i * dt, dt); }
+        const peak = Math.max(1e-6, ...x.map(Math.abs));
+        return { t, x, dt, peak };
+      },
+      drawAnim: (a, r, n) => drawSpringMass(a, -r.x[n] / r.peak, { damper: F.z > 0 }),
+      drawPlot: (p, r, upto) => {
+        const T = r.t[r.t.length - 1], series = [];
+        if (F.z > 0 && F.z < 1) {
+          const wn = Math.sqrt(F.k / F.m), A = Math.sqrt(F.x0 ** 2 + ((F.v0 + F.z * wn * F.x0) / (wn * Math.sqrt(1 - F.z ** 2))) ** 2);
+          const env = r.t.filter((_, i) => i % 20 === 0).map((s) => [s, A * Math.exp(-F.z * wn * s)]);
+          series.push({ data: env, color: cssVar("--muted"), width: 1, dash: [4, 4] }, { data: env.map(([s, v]) => [s, -v]), color: cssVar("--muted"), width: 1, dash: [4, 4] });
+        }
+        series.push({ data: upto, color: cssVar("--accent"), width: 2.2 });
+        drawPlot(p, series, { xmin: 0, xmax: T, ymin: -r.peak * 1.1, ymax: r.peak * 1.1, xlabel: "time (s)", ylabel: "x (m)" });
+      },
+    });
+    freePlay.onclick = () => free.toggle(freePlay); freeRestart.onclick = () => free.restart();
+
+    /* ---------- 2. FORCED ---------- */
+    const G = sliders(forcedCtrls, [
+      { id: "gm", key: "m", label: "Mass m", min: 0.2, max: 5, step: 0.1, value: 1, unit: "kg", dp: 1 },
+      { id: "gk", key: "k", label: "Stiffness k", min: 10, max: 400, step: 5, value: 100, unit: "N/m", dp: 0 },
+      { id: "gz", key: "z", label: "Damping ratio ζ", min: 0.01, max: 1, step: 0.01, value: 0.05 },
+      { id: "gf", key: "F0", label: "Force amplitude F₀", min: 1, max: 50, step: 1, value: 10, unit: "N", dp: 0 },
+      { id: "gr", key: "r", label: "Frequency ratio r = ω/ωₙ", min: 0.1, max: 3, step: 0.01, value: 0.9 },
+      { html: readout("gq", [["w", "ω (rad/s)"], ["M", "Magnification"], ["X", "Steady amp. (m)"], ["ph", "Phase lag (°)"], ["TR", "Transmissibility"], ["xst", "F₀/k (m)"]]) },
+      { html: buttons("forced") },
+    ], () => forced.recompute());
+    const forced = Sim({
+      anim: forcedAnim, plot: forcedPlot, speed: 1,
+      compute() {
+        const { m, k, z, F0, r } = G, wn = Math.sqrt(k / m), w = r * wn, c = 2 * z * Math.sqrt(k * m);
+        const M = 1 / Math.sqrt((1 - r * r) ** 2 + (2 * z * r) ** 2), TR = Math.sqrt(1 + (2 * z * r) ** 2) * M;
+        gq_w.textContent = fmt(w); gq_M.textContent = fmt(M); gq_X.textContent = fmt(F0 / k * M, 3);
+        gq_ph.textContent = fmt(Math.atan2(2 * z * r, 1 - r * r) * 180 / Math.PI, 1); gq_TR.textContent = fmt(TR); gq_xst.textContent = fmt(F0 / k, 3);
+        const T = Math.min(30, Math.max(6, 25 * 2 * Math.PI / Math.min(w, wn))), N = 3000, dt = T / N;
+        const t = [], x = [], f = []; let y = [0, 0];
+        for (let i = 0; i <= N; i++) { const ti = i * dt; t.push(ti); x.push(y[0]); f.push(Math.sin(w * ti)); y = rk4((s, q) => [q[1], (F0 * Math.sin(w * s) - c * q[1] - k * q[0]) / m], y, ti, dt); }
+        const peak = Math.max(1e-6, ...x.map(Math.abs));
+        return { t, x, f, dt, peak };
+      },
+      drawAnim: (a, r, n) => drawSpringMass(a, -r.x[n] / r.peak, { damper: true, force: -r.f[n] }),
+      drawPlot: (p, r, upto) => drawPlot(p, [{ data: upto, color: cssVar("--accent"), width: 1.8 }],
+        { xmin: 0, xmax: r.t[r.t.length - 1], ymin: -r.peak * 1.1, ymax: r.peak * 1.1, xlabel: "time (s)", ylabel: "x (m)" }),
+      setupExtra() { this.frf = fitCanvas(frfPlot); },
+      drawExtra() {
+        if (!this.frf) return;
+        const curve = (z) => { const d = []; for (let r = 0; r <= 3; r += 0.005) d.push([r, 1 / Math.sqrt((1 - r * r) ** 2 + (2 * z * r) ** 2)]); return d; };
+        const z = G.z, Mz = 1 / Math.sqrt((1 - G.r ** 2) ** 2 + (2 * z * G.r) ** 2), ymax = Math.min(12, Math.max(3, 1 / (2 * z) * 1.1));
+        drawPlot(this.frf, [
+          ...[0.1, 0.25, 0.5].filter((v) => Math.abs(v - z) > 0.02).map((v) => ({ data: curve(v), color: cssVar("--muted"), width: 1, dash: [3, 3] })),
+          { data: curve(z), color: cssVar("--accent-2"), width: 2.2 },
+          { data: [[G.r, Math.min(Mz, ymax)]], color: cssVar("--bad"), width: 0, marker: true },
+        ], { xmin: 0, xmax: 3, ymin: 0, ymax, xlabel: "frequency ratio r = ω/ωₙ   (dashed: ζ = 0.1, 0.25, 0.5)", ylabel: "X / (F₀/k)" });
+      },
+    });
+    forcedPlay.onclick = () => forced.toggle(forcedPlay); forcedRestart.onclick = () => forced.restart();
+
+    /* ---------- 3. PID CONTROL ---------- */
+    const C = sliders(ctrlCtrls, [
+      { id: "cm", key: "m", label: "Mass m", min: 0.2, max: 5, step: 0.1, value: 1, unit: "kg", dp: 1 },
+      { id: "ck", key: "k", label: "Plant stiffness k", min: 0, max: 100, step: 1, value: 20, unit: "N/m", dp: 0 },
+      { id: "cc", key: "c", label: "Plant damping c", min: 0, max: 10, step: 0.1, value: 1, unit: "N·s/m", dp: 1 },
+      { id: "cp", key: "Kp", label: "Kp", min: 0, max: 500, step: 1, value: 120, dp: 0 },
+      { id: "ci", key: "Ki", label: "Ki", min: 0, max: 500, step: 1, value: 60, dp: 0 },
+      { id: "cd", key: "Kd", label: "Kd", min: 0, max: 60, step: 0.5, value: 8, dp: 1 },
+      { id: "ct", key: "target", label: "Target position", min: -1, max: 1, step: 0.05, value: 0.6, unit: "m" },
+      { html: readout("cr", [["os", "Overshoot (%)"], ["ts", "Settling 2% (s)"], ["tr", "Rise 10–90% (s)"], ["ess", "Final error (m)"]]) },
+      { html: `<div class="btn-row"><button class="btn ghost small" data-preset="p">P only</button><button class="btn ghost small" data-preset="pd">PD</button><button class="btn ghost small" data-preset="pid">PID</button></div>` },
+      { html: buttons("ctrl") },
+    ], () => ctrl.recompute());
+    ctrlCtrls.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-preset]"); if (!b) return;
+      const P = { p: [120, 0, 0], pd: [120, 0, 20], pid: [120, 60, 20] }[b.dataset.preset];
+      [["cp", P[0]], ["ci", P[1]], ["cd", P[2]]].forEach(([id, v]) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("input")); });
+    });
+    const ctrl = Sim({
+      anim: ctrlAnim, plot: ctrlPlot, speed: 1,
+      compute() {
+        const { m, k, c, Kp, Ki, Kd, target } = C, T = 6, N = 3000, dt = T / N;
+        const t = [], x = []; let y = [0, 0, 0]; // x, v, integral of error
+        const f = (_, s) => { const e = target - s[0]; const u = Kp * e + Ki * s[2] - Kd * s[1]; return [s[1], (u - c * s[1] - k * s[0]) / m, e]; };
+        for (let i = 0; i <= N; i++) { t.push(i * dt); x.push(y[0]); y = rk4(f, y, i * dt, dt); if (!isFinite(y[0]) || Math.abs(y[0]) > 1e3) { y = [NaN, NaN, NaN]; } }
+        // metrics
+        const fin = x[N], R = target || 1e-9;
+        let os = 0, ts = NaN, tr = NaN, t10, t90;
+        if (isFinite(fin) && target !== 0) {
+          const pk = target > 0 ? Math.max(...x) : Math.min(...x);
+          os = Math.max(0, (pk - target) / target * 100);
+          for (let i = 0; i <= N; i++) { if (t10 === undefined && x[i] / R >= 0.1) t10 = t[i]; if (t90 === undefined && x[i] / R >= 0.9) t90 = t[i]; }
+          tr = t90 !== undefined && t10 !== undefined ? t90 - t10 : NaN;
+          let last = -1; for (let i = 0; i <= N; i++) if (Math.abs(x[i] - target) > 0.02 * Math.abs(target)) last = i;
+          ts = last < N ? t[last + 1] : NaN;
+        }
+        cr_os.textContent = fmt(os, 1); cr_ts.textContent = isFinite(ts) ? fmt(ts) : "> 6"; cr_tr.textContent = fmt(tr); cr_ess.textContent = isFinite(fin) ? fmt(target - fin, 3) : "unstable";
+        return { t, x, dt, target };
+      },
+      drawAnim: (a, r, n) => drawSpringMass(a, -(r.x[n] || 0) / 1.2, { damper: true, target: -r.target / 1.2 }),
+      drawPlot: (p, r, upto) => drawPlot(p, [
+        { data: [[0, r.target], [6, r.target]], color: cssVar("--bad"), width: 1.5, dash: [6, 4] },
+        { data: [[0, r.target * 1.02], [6, r.target * 1.02]], color: cssVar("--muted"), width: 1, dash: [2, 4] },
+        { data: [[0, r.target * 0.98], [6, r.target * 0.98]], color: cssVar("--muted"), width: 1, dash: [2, 4] },
+        { data: upto, color: cssVar("--accent"), width: 2.2 },
+      ], { xmin: 0, xmax: 6, ymin: Math.min(0, r.target * 1.6) - 0.05, ymax: Math.max(0, r.target * 1.6) + 0.05, xlabel: "time (s)", ylabel: "x (m)" }),
+    });
+    ctrlPlay.onclick = () => ctrl.toggle(ctrlPlay); ctrlRestart.onclick = () => ctrl.restart();
+
+    [free, forced, ctrl].forEach((s) => { s.setup(); s.recompute(); sims.push(s); });
+
+    /* ---------- GIFs ---------- */
+    gifGrid.innerHTML = GIFS.map((g) => `<figure class="card" style="padding:14px"><img src="${esc(g.file)}" alt="${esc(g.title)}" loading="lazy"><figcaption><b>${esc(g.title)}</b>${esc(g.text)}</figcaption></figure>`).join("");
+  </script>
+</body>
+</html>

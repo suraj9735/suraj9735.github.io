@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Tutorials | Suraj Kumar</title>
+  <meta name="description" content="Video tutorials on vibrations, machining chatter, signal processing and control.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/content.js"></script>
+  <script src="js/site.js"></script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main>
+    <div class="container page-head">
+      <p class="eyebrow">Video tutorials</p>
+      <h1>Learn by watching</h1>
+      <p>Short lessons on vibrations, machining, signal processing and control. Each one pairs with an exercise or a simulator on this site.</p>
+    </div>
+    <div class="container">
+      <div class="toolbar">
+        <div id="filters" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        <input class="search" id="q" type="search" placeholder="Search tutorials…">
+      </div>
+      <div class="grid auto" id="list"></div>
+    </div>
+  </main>
+  <footer id="site-footer"></footer>
+
+  <script>
+    let topic = "All";
+    const topics = ["All", ...new Set(TUTORIALS.map((t) => t.topic))];
+    filters.innerHTML = topics.map((t) => `<button class="pill${t === "All" ? " active" : ""}" data-t="${esc(t)}">${esc(t)}</button>`).join("");
+    filters.onclick = (e) => { const b = e.target.closest("[data-t]"); if (!b) return; topic = b.dataset.t; [...filters.children].forEach((x) => x.classList.toggle("active", x === b)); render(); };
+    q.oninput = render;
+    function media(t) {
+      if (t.youtube) return `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(t.youtube)}" title="${esc(t.title)}" loading="lazy" allowfullscreen></iframe>`;
+      if (t.file) return `<video src="${esc(t.file)}" controls preload="metadata"></video>`;
+      return `<div class="soon"><div class="play">▶</div>Video coming soon</div>`;
+    }
+    function render() {
+      const s = q.value.toLowerCase();
+      const items = TUTORIALS.filter((t) => (topic === "All" || t.topic === topic) && (t.title + t.desc).toLowerCase().includes(s));
+      list.innerHTML = items.length ? items.map((t) => `
+        <article class="card video">
+          <div class="frame">${media(t)}</div>
+          <div class="body">
+            <div class="meta"><span class="chip">${esc(t.topic)}</span><span class="chip alt">${esc(t.level)}</span><span>${esc(t.duration)}</span></div>
+            <h3>${esc(t.title)}</h3>
+            <p>${esc(t.desc)}</p>
+          </div>
+        </article>`).join("") : `<p class="empty">No tutorials match your search.</p>`;
+    }
+    render();
+  </script>
+</body>
+</html>

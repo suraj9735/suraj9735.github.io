@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Exercises | Suraj Kumar</title>
+  <meta name="description" content="Worked exercises on vibrations, machining and control with hints and answer checking.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/content.js"></script>
+  <script src="js/site.js"></script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main>
+    <div class="narrow page-head">
+      <p class="eyebrow">Exercises</p>
+      <h1>Practice problems</h1>
+      <p>Type your answer to check it instantly, or open the hint and the full solution.</p>
+    </div>
+    <div class="narrow">
+      <div class="toolbar" id="filters"></div>
+      <p id="score" style="color:var(--muted);font-size:14px"></p>
+      <div id="list"></div>
+    </div>
+  </main>
+  <footer id="site-footer"></footer>
+
+  <script>
+    let topic = "All";
+    const solved = new Set();
+    const topics = ["All", ...new Set(EXERCISES.map((x) => x.topic))];
+    filters.innerHTML = topics.map((t) => `<button class="pill${t === "All" ? " active" : ""}" data-t="${esc(t)}">${esc(t)}</button>`).join("");
+    filters.onclick = (e) => { const b = e.target.closest("[data-t]"); if (!b) return; topic = b.dataset.t; [...filters.children].forEach((x) => x.classList.toggle("active", x === b)); render(); };
+    const levelColor = { Easy: "", Medium: "alt", Hard: "alt" };
+    function render() {
+      list.innerHTML = EXERCISES.map((x, i) => ({ x, i })).filter(({ x }) => topic === "All" || x.topic === topic).map(({ x, i }) => `
+        <article class="card exercise">
+          <div class="meta"><span class="chip">${esc(x.topic)}</span><span class="chip ${levelColor[x.level] || ""}">${esc(x.level)}</span><span>Exercise ${i + 1}</span></div>
+          <h3>${esc(x.title)}</h3>
+          <p class="q">${esc(x.q)}</p>
+          ${x.answer !== undefined ? `
+          <form class="answer-check" data-i="${i}">
+            <input type="text" inputmode="decimal" placeholder="Your answer" aria-label="Your answer">
+            ${x.unit ? `<span style="color:var(--muted)">${esc(x.unit)}</span>` : ""}
+            <button class="btn primary small">Check</button>
+            <span class="fb"></span>
+          </form>` : ""}
+          <details><summary>Hint</summary>${esc(x.hint)}</details>
+          <details><summary>Solution</summary>${x.solution}</details>
+        </article>`).join("");
+      updateScore();
+    }
+    function updateScore() { score.textContent = `Solved ${solved.size} of ${EXERCISES.length}`; }
+    list.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const f = e.target, x = EXERCISES[+f.dataset.i];
+      const v = parseFloat(f.querySelector("input").value.replace(",", "."));
+      const fb = f.querySelector(".fb");
+      const ok = isFinite(v) && Math.abs(v - x.answer) <= Math.abs(x.answer) * (x.tol || 0.02);
+      fb.className = "fb " + (ok ? "ok" : "bad");
+      fb.textContent = ok ? "✓ Correct!" : isFinite(v) ? "✗ Not quite. Try the hint." : "Enter a number";
+      if (ok) { solved.add(+f.dataset.i); updateScore(); }
+    });
+    render();
+  </script>
+</body>
+</html>

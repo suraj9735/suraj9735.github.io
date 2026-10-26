@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quiz | Suraj Kumar</title>
+  <meta name="description" content="Quizzes on vibrations, machining chatter and control.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/content.js"></script>
+  <script src="js/site.js"></script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main>
+    <div class="narrow page-head">
+      <p class="eyebrow">Quiz</p>
+      <h1>Test yourself</h1>
+      <p>Pick a topic. You get instant feedback and an explanation after every question.</p>
+    </div>
+    <div class="narrow">
+      <div class="quiz-select" id="sets"></div>
+      <div class="card quiz-wrap" id="quiz"></div>
+    </div>
+  </main>
+  <footer id="site-footer"></footer>
+
+  <script>
+    const names = Object.keys(QUIZZES);
+    let set, idx, score, answered;
+    sets.innerHTML = names.map((n, i) => `<button class="pill${i ? "" : " active"}" data-n="${esc(n)}">${esc(n)} · ${QUIZZES[n].length}</button>`).join("");
+    sets.onclick = (e) => { const b = e.target.closest("[data-n]"); if (!b) return; [...sets.children].forEach((x) => x.classList.toggle("active", x === b)); start(b.dataset.n); };
+    function start(n) { set = n; idx = 0; score = 0; show(); }
+    function show() {
+      const Q = QUIZZES[set], item = Q[idx];
+      answered = false;
+      quiz.innerHTML = `
+        <div class="progress"><span style="width:${(idx / Q.length) * 100}%"></span></div>
+        <div class="meta"><span class="chip">${esc(set)}</span><span>Question ${idx + 1} of ${Q.length}</span><span style="margin-left:auto">Score: ${score}</span></div>
+        <p class="quiz-q">${esc(item.q)}</p>
+        <div class="options">${item.o.map((o, i) => `<button class="option" data-i="${i}"><b style="color:var(--muted);margin-right:8px">${"ABCD"[i]}</b>${esc(o)}</button>`).join("")}</div>
+        <div id="ex"></div>
+        <div class="quiz-nav"><span></span><button class="btn primary" id="next" disabled>${idx + 1 < Q.length ? "Next question →" : "See result"}</button></div>`;
+      quiz.querySelector(".options").onclick = (e) => {
+        const b = e.target.closest(".option"); if (!b || answered) return;
+        answered = true;
+        const pick = +b.dataset.i, ok = pick === item.a;
+        if (ok) score++;
+        quiz.querySelectorAll(".option").forEach((o, i) => { o.disabled = true; if (i === item.a) o.classList.add("correct"); else if (i === pick) o.classList.add("wrong"); });
+        ex.innerHTML = `<div class="explain"><b style="color:var(--${ok ? "ok" : "bad"})">${ok ? "Correct." : "Not quite."}</b> ${esc(item.e)}</div>`;
+        next.disabled = false;
+      };
+      next.onclick = () => { idx++; idx < Q.length ? show() : result(); };
+    }
+    function result() {
+      const Q = QUIZZES[set], pct = Math.round((score / Q.length) * 100);
+      const msg = pct === 100 ? "Perfect score!" : pct >= 70 ? "Great work." : pct >= 40 ? "Good start. Review the explanations and try again." : "Try the tutorials and exercises, then come back.";
+      quiz.innerHTML = `
+        <div class="progress"><span style="width:100%"></span></div>
+        <div style="text-align:center;padding:24px 0">
+          <p class="eyebrow">${esc(set)}</p>
+          <div class="score-big">${score} / ${Q.length}</div>
+          <p style="color:var(--muted);font-size:18px">${msg}</p>
+          <div class="cta" style="justify-content:center;margin-top:20px">
+            <button class="btn primary" id="again">Try again</button>
+            <a class="btn ghost" href="exercises.html">Practice exercises</a>
+          </div>
+        </div>`;
+      again.onclick = () => start(set);
+    }
+    start(names[0]);
+  </script>
+</body>
+</html>

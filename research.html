@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Research | Suraj Kumar</title>
+  <meta name="description" content="Real-time chatter detection in high-speed micromilling.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/content.js"></script>
+  <script src="js/site.js"></script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main>
+    <div class="container page-head">
+      <p class="eyebrow">Research</p>
+      <h1>Real-time chatter detection in high-speed micromilling</h1>
+      <p id="summary"></p>
+    </div>
+
+    <section class="container">
+      <div class="grid c2" id="themes"></div>
+    </section>
+
+    <section class="section">
+      <div class="container grid c2" style="align-items:center">
+        <div>
+          <p class="eyebrow">Stable vs. chatter</p>
+          <h2>What the signal looks like</h2>
+          <p class="sub">A simulated accelerometer signal. In a stable cut the energy sits at the tooth passing harmonics. When chatter starts, a new component grows near a structural mode. Move the slider to change when chatter begins.</p>
+          <div class="ctrl" style="max-width:360px">
+            <label>Chatter onset <output id="onsetOut"></output></label>
+            <input type="range" id="onset" min="0.1" max="0.9" step="0.01" value="0.5">
+          </div>
+          <div class="ctrl" style="max-width:360px;margin-top:12px">
+            <label>Chatter growth rate <output id="growOut"></output></label>
+            <input type="range" id="grow" min="5" max="60" step="1" value="25">
+          </div>
+        </div>
+        <div class="card" style="padding:16px">
+          <canvas id="sig" style="width:100%;height:220px"></canvas>
+          <canvas id="rms" style="width:100%;height:180px;margin-top:8px"></canvas>
+          <small style="color:var(--muted)">Top: acceleration. Bottom: moving RMS with a detection threshold. The red line marks the detected onset.</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container">
+        <p class="eyebrow">Output</p>
+        <h2>Publications &amp; presentations</h2>
+        <p class="sub">Edit the list in <code>js/content.js</code>.</p>
+        <div class="grid" id="pubs"></div>
+      </div>
+    </section>
+  </main>
+  <footer id="site-footer"></footer>
+
+  <script>
+    summary.textContent = RESEARCH.summary;
+    themes.innerHTML = RESEARCH.themes.map((t, i) => `<div class="card"><span class="chip">Step ${i + 1}</span><h3 style="margin:10px 0 6px;font-size:19px">${esc(t.title)}</h3><p style="margin:0;color:var(--muted)">${esc(t.text)}</p></div>`).join("");
+    pubs.innerHTML = RESEARCH.publications.map((p) => `
+      <div class="card" style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div><b>${p.link ? `<a href="${esc(p.link)}" target="_blank" rel="noopener">${esc(p.title)}</a>` : esc(p.title)}</b>
+        <div style="color:var(--muted);font-size:14.5px">${esc(p.authors)} · <i>${esc(p.venue)}</i>, ${esc(p.year)}</div></div>
+        ${p.status ? `<span class="chip alt" style="align-self:start">${esc(p.status)}</span>` : ""}
+      </div>`).join("");
+
+    // Synthetic milling signal: tooth-passing harmonics + growing chatter component + noise
+    const fs = 2000, T = 2, ftp = 40, fch = 137;
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5);
+    const noise = Array.from({ length: fs * T }, rnd);
+    let c1, c2;
+    function draw() {
+      const on = +onset.value * T, g = +grow.value;
+      onsetOut.textContent = on.toFixed(2) + " s"; growOut.textContent = g + " /s";
+      const sig = [], N = fs * T;
+      for (let i = 0; i < N; i++) {
+        const t = i / fs;
+        const stable = 0.5 * Math.sin(2 * Math.PI * ftp * t) + 0.25 * Math.sin(2 * Math.PI * 2 * ftp * t + 1);
+        const ch = t > on ? Math.min(2.2, 0.02 * Math.exp(g * (t - on))) * Math.sin(2 * Math.PI * fch * t) : 0;
+        sig.push([t, stable + ch + 0.25 * noise[i]]);
+      }
+      const w = 50, rmsD = [];
+      for (let i = w; i < N; i += 5) { let s = 0; for (let j = i - w; j < i; j++) s += sig[j][1] ** 2; rmsD.push([sig[i][0], Math.sqrt(s / w)]); }
+      const thr = 0.75, hit = rmsD.find(([, v]) => v > thr);
+      drawPlot(c1, [{ data: sig, color: cssVar("--accent"), width: 1 }], { xmin: 0, xmax: T, ylabel: "accel." });
+      const series = [{ data: rmsD, color: cssVar("--accent-2"), width: 2 }, { data: [[0, thr], [T, thr]], color: cssVar("--warn"), width: 1.5, dash: [6, 4] }];
+      if (hit) series.push({ data: [[hit[0], 0], [hit[0], 2]], color: cssVar("--bad"), width: 2 });
+      drawPlot(c2, series, { xmin: 0, xmax: T, ymin: 0, ymax: 1.8, xlabel: "time (s)", ylabel: "RMS" });
+    }
+    function setup() { c1 = fitCanvas(sig); c2 = fitCanvas(rms); draw(); }
+    onset.oninput = grow.oninput = draw;
+    addEventListener("resize", setup); addEventListener("themechange", draw);
+    setup();
+  </script>
+</body>
+</html>
